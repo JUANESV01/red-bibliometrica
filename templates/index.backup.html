@@ -1,0 +1,1450 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analizador Bibliométrico — Redes & Correlaciones</title>
+  <!-- CDNs for D3.js and Plotly.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;700;800&display=swap');
+
+    :root {
+      --bg: #0b0e14;
+      --surface: #13181f;
+      --border: #1e2630;
+      --accent-teal: #00d4aa;
+      --accent-orange: #ff6b35;
+      --accent-purple: #7b5ea7;
+      --accent-yellow: #f0c040;
+      --accent-cyan: #00f0ff;
+      --accent-pink: #ff007f;
+      --text: #c8d6e5;
+      --muted: #5a6a7e;
+      --shadow: rgba(0, 0, 0, 0.4);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* HEADER */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      flex-shrink: 0;
+      box-shadow: 0 4px 20px var(--shadow);
+      z-index: 10;
+    }
+    header .title-area h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      color: var(--accent-teal);
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    header .title-area h1 span {
+      background: rgba(0, 212, 170, 0.12);
+      border: 1px solid var(--accent-teal);
+      font-size: 9px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Space Mono', monospace;
+    }
+    header .title-area p {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* TABS */
+    .nav-tabs {
+      display: flex;
+      gap: 4px;
+      background: rgba(11, 14, 20, 0.5);
+      padding: 4px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+    .nav-tab {
+      padding: 8px 16px;
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      border-radius: 3px;
+      transition: all 0.2s;
+    }
+    .nav-tab:hover { color: var(--text); }
+    .nav-tab.active {
+      background: var(--accent-teal);
+      color: var(--bg);
+      font-weight: 700;
+      box-shadow: 0 0 10px rgba(0, 212, 170, 0.4);
+    }
+
+    /* EXCEL ACTIONS */
+    .file-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .upload-btn-wrapper {
+      position: relative;
+      overflow: hidden;
+      display: inline-block;
+    }
+    .btn-upload {
+      border: 1px solid var(--border);
+      background: rgba(30, 38, 48, 0.4);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-family: 'Space Mono', monospace;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-upload:hover {
+      border-color: var(--accent-orange);
+      color: var(--accent-orange);
+      background: rgba(255, 107, 53, 0.05);
+    }
+    .upload-btn-wrapper input[type=file] {
+      font-size: 100px;
+      position: absolute;
+      left: 0;
+      top: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .btn-reset {
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-family: 'Space Mono', monospace;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: all 0.2s;
+    }
+    .btn-reset:hover {
+      color: var(--accent-pink);
+    }
+
+    /* MAIN CONTENT */
+    .content-area {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+    .tab-content {
+      display: none;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    .tab-content.active {
+      display: flex;
+    }
+
+    /* SIDEBAR */
+    .sidebar {
+      width: 320px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      overflow: hidden;
+      box-shadow: 4px 0 15px rgba(0, 0, 0, 0.2);
+    }
+    .sidebar-section-title {
+      padding: 12px 16px;
+      font-size: 9px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      background: rgba(11, 14, 20, 0.2);
+      font-weight: bold;
+    }
+
+    /* CONTROLS */
+    .controls {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(11, 14, 20, 0.1);
+    }
+    .control-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+    .control-row:last-child { margin-bottom: 0; }
+    .control-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .control-header label {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+    }
+    .val-display {
+      font-size: 10px;
+      color: var(--accent-teal);
+      font-weight: 700;
+    }
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 3px;
+      background: var(--border);
+      outline: none;
+      cursor: pointer;
+      border-radius: 2px;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: var(--accent-teal);
+      box-shadow: 0 0 5px rgba(0, 212, 170, 0.6);
+      transition: transform 0.1s;
+    }
+    input[type=range]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+    .sub-slider::-webkit-slider-thumb {
+      background: var(--accent-orange) !important;
+      box-shadow: 0 0 5px rgba(255, 107, 53, 0.6) !important;
+    }
+    
+    /* SELECTS */
+    .select-wrapper {
+      position: relative;
+      width: 100%;
+    }
+    select {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 12px;
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      outline: none;
+      cursor: pointer;
+      border-radius: 4px;
+      appearance: none;
+      transition: border-color 0.2s;
+    }
+    select:focus {
+      border-color: var(--accent-teal);
+    }
+    .select-wrapper::after {
+      content: '▼';
+      font-size: 8px;
+      color: var(--muted);
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+
+    /* NETWORKS BUTTONS (PALABRAS CLAVE, AUTORES, REVISTAS) */
+    .network-selector {
+      display: flex;
+      padding: 12px 16px;
+      gap: 6px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(11, 14, 20, 0.1);
+    }
+    .btn-net-type {
+      flex: 1;
+      padding: 8px 0;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      border-radius: 3px;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .btn-net-type:hover {
+      color: var(--text);
+      border-color: var(--muted);
+    }
+    .btn-net-type.active {
+      background: rgba(0, 212, 170, 0.05);
+      border-color: var(--accent-teal);
+      color: var(--accent-teal);
+      font-weight: 700;
+    }
+
+    /* INFO PANEL */
+    .info-panel {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+    }
+    .info-panel::-webkit-scrollbar { width: 4px; }
+    .info-panel::-webkit-scrollbar-track { background: transparent; }
+    .info-panel::-webkit-scrollbar-thumb { background: var(--border); }
+
+    .node-info { animation: fadeIn 0.2s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+    .info-label {
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      margin-bottom: 4px;
+      margin-top: 14px;
+    }
+    .info-label:first-child { margin-top: 0; }
+    .info-value {
+      font-size: 11px;
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .info-value.large {
+      font-size: 16px;
+      color: var(--accent-teal);
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      word-break: break-word;
+    }
+    .tag {
+      display: inline-block;
+      padding: 2px 6px;
+      background: rgba(0, 212, 170, 0.06);
+      border: 1px solid rgba(0, 212, 170, 0.15);
+      font-size: 9px;
+      color: var(--accent-teal);
+      margin: 2px 2px 2px 0;
+      border-radius: 2px;
+    }
+    .tag-author {
+      background: rgba(255, 107, 53, 0.06);
+      border-color: rgba(255, 107, 53, 0.15);
+      color: var(--accent-orange);
+    }
+    .tag-journal {
+      background: rgba(123, 94, 167, 0.06);
+      border-color: rgba(123, 94, 167, 0.15);
+      color: var(--accent-purple);
+    }
+
+    /* LEGEND */
+    .legend {
+      padding: 16px;
+      border-top: 1px solid var(--border);
+      background: rgba(11, 14, 20, 0.2);
+    }
+    .legend-title {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+    .legend-content {
+      max-height: 160px;
+      overflow-y: auto;
+    }
+    .legend-content::-webkit-scrollbar { width: 3px; }
+    .legend-content::-webkit-scrollbar-thumb { background: var(--border); }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 6px;
+      font-size: 9px;
+    }
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .legend-line {
+      width: 16px;
+      height: 2px;
+      flex-shrink: 0;
+    }
+
+    /* GRAPH CONTAINER AREA */
+    .graph-pane {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+    
+    /* STATS BAR */
+    .stats-bar {
+      display: flex;
+      gap: 1px;
+      background: var(--border);
+      flex-shrink: 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .stat {
+      flex: 1;
+      background: var(--surface);
+      padding: 10px 12px;
+      text-align: center;
+      position: relative;
+    }
+    .stat-num {
+      font-family: 'Syne', sans-serif;
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--accent-teal);
+    }
+    .stat-label {
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .graph-container {
+      flex: 1;
+      position: relative;
+      background: var(--bg);
+      overflow: hidden;
+    }
+    svg { width: 100%; height: 100%; }
+
+    /* SVG Elements */
+    .node circle { stroke-width: 1.5; cursor: pointer; transition: stroke-width 0.15s, filter 0.15s; }
+    .node circle:hover { filter: brightness(1.3); }
+    .node.highlighted circle { stroke-width: 3; filter: brightness(1.4); }
+    .node.dimmed circle { opacity: 0.15; }
+    .node.dimmed text { opacity: 0.1; }
+
+    .node text {
+      font-family: 'Space Mono', monospace;
+      font-size: 8px;
+      fill: var(--text);
+      pointer-events: none;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+    }
+    .node.highlighted text { fill: #fff; font-weight: bold; }
+
+    .link { stroke-opacity: 0.35; transition: stroke-opacity 0.15s; }
+    .link.highlighted { stroke-opacity: 0.9; }
+    .link.dimmed { stroke-opacity: 0.04; }
+
+    /* TOOLTIP */
+    .tooltip {
+      position: absolute;
+      background: rgba(19, 24, 31, 0.95);
+      border: 1px solid var(--accent-teal);
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-size: 10px;
+      pointer-events: none;
+      max-width: 250px;
+      z-index: 100;
+      display: none;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+      backdrop-filter: blur(4px);
+    }
+    .tooltip.visible { display: block; }
+    .tooltip-title { font-weight: 700; color: var(--accent-teal); margin-bottom: 4px; font-size: 11px; }
+
+    .graph-type-label {
+      position: absolute;
+      top: 16px; left: 16px;
+      font-family: 'Syne', sans-serif;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: var(--muted);
+      background: rgba(11, 14, 20, 0.6);
+      padding: 4px 8px;
+      border-radius: 3px;
+      border: 1px solid rgba(30, 38, 48, 0.3);
+    }
+
+    .reset-btn {
+      position: absolute;
+      bottom: 16px;
+      right: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 8px 14px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+    .reset-btn:hover {
+      border-color: var(--accent-teal);
+      color: var(--accent-teal);
+      background: rgba(0, 212, 170, 0.02);
+    }
+
+    .placeholder-msg {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--muted);
+      font-size: 10px;
+      text-align: center;
+      padding: 24px;
+      line-height: 1.8;
+    }
+
+    /* HEATMAP PANE */
+    .heatmap-pane {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      overflow: hidden;
+      padding: 16px;
+      height: 100%;
+    }
+    .heatmap-container {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 6px;
+      box-shadow: inset 0 0 20px rgba(0,0,0,0.4);
+      position: relative;
+    }
+    .heatmap-placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--muted);
+      font-size: 11px;
+      gap: 12px;
+    }
+    .loader {
+      border: 2px solid var(--border);
+      border-top: 2px solid var(--accent-teal);
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    /* DYNAMIC NOTIFICATIONS */
+    .notify-bar {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #00d4aa;
+      color: #0b0e14;
+      padding: 10px 20px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+      z-index: 1000;
+      box-shadow: 0 4px 15px rgba(0,212,170,0.3);
+      display: none;
+      animation: popUp 0.3s ease;
+    }
+    @keyframes popUp { from { bottom: 0; opacity: 0; } to { bottom: 20px; opacity: 1; } }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header>
+    <div class="title-area">
+      <h1>Analidador Bibliométrico <span>V2.0</span></h1>
+      <p id="sourceFileLabel">Cargando base de datos...</p>
+    </div>
+    
+    <!-- NAVIGATION TABS -->
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="switchTab('network')">Visualizador de Red</button>
+      <button class="nav-tab" onclick="switchTab('heatmap')">Matrices de Correlación</button>
+    </div>
+
+    <!-- FILE ACTIONS -->
+    <div class="file-actions">
+      <form id="uploadForm" action="/api/upload" method="post" enctype="multipart/form-data">
+        <div class="upload-btn-wrapper">
+          <button class="btn-upload">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-top:-1px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            Subir Excel
+          </button>
+          <input type="file" name="file" onchange="submitUpload()">
+        </div>
+      </form>
+      <button class="btn-reset" onclick="resetExcel()" id="resetFileBtn" style="display:none;">Restablecer</button>
+    </div>
+  </header>
+
+  <!-- CONTENT CONTAINER -->
+  <div class="content-area">
+
+    <!-- ==============================================
+         TAB 1: NETWORKS VISUALIZATION
+         ============================================== -->
+    <div class="tab-content active" id="tab-network">
+      <!-- SIDEBAR -->
+      <div class="sidebar">
+        <div class="sidebar-section-title">Tipo de Red</div>
+        <div class="network-selector">
+          <button class="btn-net-type active" onclick="switchNetworkType('keywords')">Palabras Clave</button>
+          <button class="btn-net-type" onclick="switchNetworkType('authors')">Autores</button>
+          <button class="btn-net-type" onclick="switchNetworkType('journals')">Revistas</button>
+        </div>
+
+        <div class="sidebar-section-title">Parámetros de la Red</div>
+        <div class="controls">
+          <div class="control-row">
+            <div class="control-header">
+              <label>Fuerza Repulsión</label>
+              <span class="val-display" id="forceVal">200</span>
+            </div>
+            <input type="range" id="forceSlider" min="50" max="600" value="200" oninput="adjustForce(this.value)">
+          </div>
+          <div class="control-row">
+            <div class="control-header">
+              <label>Distancia Enlaces</label>
+              <span class="val-display" id="distVal">80</span>
+            </div>
+            <input type="range" id="distSlider" min="30" max="300" value="80" oninput="adjustDistance(this.value)">
+          </div>
+          <div class="control-row">
+            <div class="control-header">
+              <label>Peso Mínimo</label>
+              <span class="val-display" id="minWeightVal">2</span>
+            </div>
+            <input type="range" id="minWeightSlider" min="1" max="15" value="2" oninput="adjustMinWeight(this.value)">
+          </div>
+        </div>
+
+        <div class="sidebar-section-title">Detalle de Selección</div>
+        <div class="info-panel" id="infoPanel">
+          <div class="placeholder-msg">
+            Haz clic en un nodo de la red para explorar sus detalles, conexiones y métricas de frecuencia.
+          </div>
+        </div>
+
+        <div class="legend">
+          <div class="legend-title" id="legendTitle">Leyenda de Temas</div>
+          <div class="legend-content" id="legendContent">
+            <!-- Dynamic Legend items -->
+          </div>
+        </div>
+      </div>
+
+      <!-- MAIN GRAPH VIEW -->
+      <div class="graph-pane">
+        <!-- STATS BAR -->
+        <div class="stats-bar">
+          <div class="stat">
+            <div class="stat-num" id="statNodes">0</div>
+            <div class="stat-label">Nodos en Pantalla</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num" id="statEdges">0</div>
+            <div class="stat-label">Enlaces en Pantalla</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num" id="statTotalArticles">0</div>
+            <div class="stat-label">Total Artículos</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num" id="statTotalSources">0</div>
+            <div class="stat-label">Total Revistas</div>
+          </div>
+        </div>
+
+        <div class="graph-container" id="graphContainer">
+          <svg id="networkSvg"></svg>
+          <div class="graph-type-label" id="graphTypeLabel">Co-ocurrencia de Palabras Clave</div>
+          <div class="tooltip" id="tooltip"></div>
+          <button class="reset-btn" onclick="resetZoom()">↺ Resetear Vista</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==============================================
+         TAB 2: CORRELATION MATRIX (HEATMAP)
+         ============================================== -->
+    <div class="tab-content" id="tab-heatmap">
+      <!-- SIDEBAR -->
+      <div class="sidebar">
+        <div class="sidebar-section-title">Configuración del Mapa</div>
+        <div class="controls">
+          <div class="control-row">
+            <label>Elemento de Análisis</label>
+            <div class="select-wrapper">
+              <select id="matrixEntitySelect" onchange="loadMatrix()">
+                <option value="keywords">Palabras Clave</option>
+                <option value="authors">Autores</option>
+                <option value="journals">Revistas / Journals</option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="control-row">
+            <label>Tipo de Matriz / Métrica</label>
+            <div class="select-wrapper">
+              <select id="matrixMetricSelect" onchange="loadMatrix()">
+                <option value="cooccurrence">Co-ocurrencia (Conteo Directo)</option>
+                <option value="cosine">Similitud Coseno (Ochiai)</option>
+                <option value="pearson">Correlación de Pearson</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="control-row">
+            <div class="control-header">
+              <label>Cantidad de Elementos (Top N)</label>
+              <span class="val-display" id="matrixTopVal">20</span>
+            </div>
+            <input type="range" class="sub-slider" id="matrixTopSlider" min="5" max="50" value="20" step="5" oninput="adjustMatrixTop(this.value)">
+          </div>
+        </div>
+
+        <div class="sidebar-section-title">Interpretación de Métricas</div>
+        <div class="info-panel" style="font-size:10px; line-height:1.6; color:var(--text);">
+          <p style="margin-bottom:12px;">
+            <b style="color:var(--accent-teal);">Co-ocurrencia:</b> Cuenta el número bruto de artículos en los que dos elementos aparecen juntos. Es ideal para identificar las relaciones más frecuentes.
+          </p>
+          <p style="margin-bottom:12px;">
+            <b style="color:var(--accent-orange);">Similitud Coseno:</b> Normaliza el conteo respecto a las frecuencias individuales (rango 0 a 1). Mide la proximidad relativa de los temas; un valor alto indica que casi siempre aparecen juntos en relación a sus frecuencias.
+          </p>
+          <p>
+            <b style="color:var(--accent-pink);">Correlación de Pearson:</b> Correlaciona los perfiles de co-ocurrencia completos de los elementos (rango -1 a 1). Mide si dos términos tienen un comportamiento similar respecto a los demás términos del corpus bibliométrico.
+          </p>
+        </div>
+      </div>
+
+      <!-- MAIN HEATMAP VIEW -->
+      <div class="heatmap-pane">
+        <div class="heatmap-container" id="plotlyHeatmap">
+          <!-- Plotly chart renders here -->
+          <div class="heatmap-placeholder">
+            <div class="loader"></div>
+            <span>Calculando y graficando matriz de correlaciones...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="notify-bar" id="notifyBar">Excel subido y procesado con éxito</div>
+
+  <!-- ==============================================
+       JAVASCRIPT SCRIPTS
+       ============================================== -->
+  <script>
+    // ============================================
+    // STATE VARIABLES
+    // ============================================
+    let activeTab = 'network';
+    let activeNetworkType = 'keywords'; // keywords, authors, journals
+    let apiData = null; // Stored API response
+    let currentFilteredNodes = [];
+    let currentFilteredEdges = [];
+
+    // Force Simulation variables
+    let simulation = null;
+    let svg, g, linkElements, nodeElements;
+    let zoomBehavior = null;
+    
+    // Sliders
+    let forcePower = 200;
+    let linkDist = 80;
+    let minWeight = 2;
+
+    // Heatmap config
+    let matrixTop = 20;
+
+    // Colors mapping for communities
+    const CATEGORY_COLORS = [
+      '#00d4aa', // Teal
+      '#ff6b35', // Orange
+      '#7b5ea7', // Purple
+      '#f0c040', // Yellow
+      '#00f0ff', // Cyan
+      '#ff007f', // Pink
+      '#4fa3e0', // Sky Blue
+      '#9ccc65', // Light Green
+      '#ffca28', // Amber
+      '#ab47bc', // Light Purple
+      '#26a69a', // Teal light
+      '#ec407a'  // Pink light
+    ];
+
+    function getColor(clusterIndex) {
+      return CATEGORY_COLORS[clusterIndex % CATEGORY_COLORS.length];
+    }
+
+    // ============================================
+    // INITIALIZATION AND API SERVICE
+    // ============================================
+    window.addEventListener('load', () => {
+      fetchAPI();
+      
+      // Auto resize listener
+      window.addEventListener('resize', () => {
+        if (activeTab === 'network') {
+          drawNetwork();
+        } else {
+          Plotly.Plots.resize(document.getElementById('plotlyHeatmap'));
+        }
+      });
+    });
+
+    function showNotification(msg) {
+      const bar = document.getElementById('notifyBar');
+      bar.textContent = msg;
+      bar.style.display = 'block';
+      setTimeout(() => {
+        bar.style.display = 'none';
+      }, 3500);
+    }
+
+    function fetchAPI() {
+      fetch('/api/data')
+        .then(response => response.json())
+        .then(res => {
+          if (res.success) {
+            apiData = res;
+            
+            // Set header and stats labels
+            document.getElementById('sourceFileLabel').textContent = 
+              `Base de datos: ${res.stats.source_file} · ${res.stats.articles} artículos analizados`;
+            
+            document.getElementById('statTotalArticles').textContent = res.stats.articles;
+            document.getElementById('statTotalSources').textContent = res.stats.journals;
+
+            // Show reset button if custom file is active
+            if (res.stats.source_file === 'uploaded_data.xlsx') {
+              document.getElementById('resetFileBtn').style.display = 'inline-block';
+            } else {
+              document.getElementById('resetFileBtn').style.display = 'none';
+            }
+
+            // Draw network and pre-load matrix data for the current dataset
+            drawNetwork();
+            loadMatrix();
+          } else {
+            alert("Error cargando datos: " + res.error);
+          }
+        })
+        .catch(err => {
+          console.error("API error:", err);
+          alert("No se pudo conectar con el servidor backend Python.");
+        });
+    }
+
+    function submitUpload() {
+      const form = document.getElementById('uploadForm');
+      const formData = new FormData(form);
+      
+      // Temporary loading UI
+      document.getElementById('sourceFileLabel').textContent = "Subiendo y analizando archivo Excel...";
+      
+      fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      })
+      .then(() => {
+        showNotification("¡Excel cargado con éxito! Recalculando...");
+        fetchAPI();
+      })
+      .catch(err => {
+        console.error(err);
+        alert("Error al subir archivo.");
+        fetchAPI();
+      });
+    }
+
+    function resetExcel() {
+      if (confirm("¿Estás seguro de restablecer el análisis al Excel original (ARCHIVOS.xlsx)?")) {
+        fetch('/api/reset', { method: 'POST' })
+          .then(r => r.json())
+          .then(() => {
+            showNotification("Restablecido al Excel predeterminado.");
+            fetchAPI();
+          });
+      }
+    }
+
+    // ============================================
+    // NAVIGATION
+    // ============================================
+    function switchTab(tabId) {
+      activeTab = tabId;
+      document.querySelectorAll('.nav-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('onclick').includes(tabId));
+      });
+      document.querySelectorAll('.tab-content').forEach(pane => {
+        pane.classList.toggle('active', pane.id === `tab-${tabId}`);
+      });
+
+      if (tabId === 'network') {
+        setTimeout(drawNetwork, 50); // delay to let UI resize
+      } else {
+        setTimeout(loadMatrix, 50);
+      }
+    }
+
+    function switchNetworkType(netType) {
+      activeNetworkType = netType;
+      document.querySelectorAll('.btn-net-type').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('onclick').includes(netType));
+      });
+
+      const labels = {
+        keywords: 'Co-ocurrencia de Palabras Clave',
+        authors: 'Red de Co-autoría',
+        journals: 'Red de Journals / Fuentes'
+      };
+      document.getElementById('graphTypeLabel').textContent = labels[netType];
+
+      // Reset selection details in panel
+      document.getElementById('infoPanel').innerHTML = `
+        <div class="placeholder-msg">
+          Haz clic en un nodo de la red para explorar sus detalles, conexiones y métricas de frecuencia.
+        </div>
+      `;
+
+      drawNetwork();
+    }
+
+    // ============================================
+    // D3.JS FORCE DIRECTED NETWORK GRAPH
+    // ============================================
+    function drawNetwork() {
+      if (!apiData) return;
+
+      const container = document.getElementById('graphContainer');
+      const W = container.clientWidth;
+      const H = container.clientHeight;
+
+      // Clean existing SVG
+      d3.select('#networkSvg').selectAll('*').remove();
+      svg = d3.select('#networkSvg');
+      
+      g = svg.append('g');
+
+      // Setup zoom behavior
+      zoomBehavior = d3.zoom()
+        .scaleExtent([0.15, 6])
+        .on('zoom', (event) => {
+          g.attr('transform', event.transform);
+        });
+      svg.call(zoomBehavior);
+
+      // Get appropriate network data from API response
+      let netData = apiData.networks[activeNetworkType];
+      let nodes = netData.nodes;
+      let edges = netData.edges;
+
+      // 1. Filter edges by weight slider
+      const filteredEdges = edges.filter(e => e.weight >= minWeight);
+      const linkedNodeIds = new Set(filteredEdges.flatMap(e => [e.source, e.target]));
+      
+      // To keep visual cohesion, we only show nodes that have links at this weight threshold,
+      // OR we show all nodes if the total node count is small.
+      const filteredNodes = nodes.filter(n => linkedNodeIds.has(n.id) || nodes.length < 25);
+
+      // Update counters in stats bar
+      document.getElementById('statNodes').textContent = filteredNodes.length;
+      document.getElementById('statEdges').textContent = filteredEdges.length;
+
+      // 2. Set up scales
+      const maxCount = d3.max(filteredNodes, d => d.count) || 1;
+      const rScale = d3.scaleSqrt().domain([1, maxCount]).range([5, 25]);
+      
+      const maxWeight = d3.max(filteredEdges, d => d.weight) || 1;
+      const wScale = d3.scaleLinear().domain([1, maxWeight]).range([0.8, 6.5]);
+
+      // Deep copy nodes/edges to prevent simulation mutability issues
+      const simNodes = filteredNodes.map(d => ({...d}));
+      const simEdges = filteredEdges.map(e => ({...e}));
+
+      // 3. Draw Edges (Links)
+      linkElements = g.append('g')
+        .selectAll('line')
+        .data(simEdges)
+        .join('line')
+        .attr('class', 'link')
+        .attr('stroke', '#3a4a5e')
+        .attr('stroke-width', d => wScale(d.weight));
+
+      // 4. Draw Nodes
+      nodeElements = g.append('g')
+        .selectAll('g')
+        .data(simNodes)
+        .join('g')
+        .attr('class', 'node')
+        .call(d3.drag()
+          .on('start', dragStart)
+          .on('drag', dragged)
+          .on('end', dragEnd))
+        .on('click', (event, d) => onNodeClick(event, d, filteredEdges))
+        .on('mouseover', onNodeOver)
+        .on('mouseout', onNodeOut);
+
+      nodeElements.append('circle')
+        .attr('r', d => rScale(d.count))
+        .attr('fill', d => getColor(d.cluster))
+        .attr('fill-opacity', 0.8)
+        .attr('stroke', d => getColor(d.cluster))
+        .attr('stroke-opacity', 0.4);
+
+      nodeElements.append('text')
+        .attr('dy', d => rScale(d.count) + 9)
+        .attr('text-anchor', 'middle')
+        .text(d => d.id.length > 20 ? d.id.slice(0, 18) + '…' : d.id);
+
+      // 5. Setup force simulation
+      if (simulation) simulation.stop();
+      simulation = d3.forceSimulation(simNodes)
+        .force('link', d3.forceLink(simEdges).id(d => d.id).distance(linkDist).strength(0.5))
+        .force('charge', d3.forceManyBody().strength(-forcePower))
+        .force('center', d3.forceCenter(W / 2, H / 2))
+        .force('collision', d3.forceCollide().radius(d => rScale(d.count) + 6))
+        .on('tick', ticked);
+
+      // 6. Draw dynamic Legend in sidebar
+      updateNetworkLegend(netData.cluster_labels);
+
+      // Reset selection when clicking background SVG
+      svg.on('click', (event) => {
+        if (event.target.tagName === 'svg') {
+          nodeElements.classed('highlighted', false).classed('dimmed', false);
+          linkElements.classed('highlighted', false).classed('dimmed', false);
+          document.getElementById('infoPanel').innerHTML = `
+            <div class="placeholder-msg">
+              Haz clic en un nodo de la red para explorar sus detalles, conexiones y métricas de frecuencia.
+            </div>
+          `;
+        }
+      });
+      
+      // Bind hover tooltip repositioning
+      svg.on('mousemove', moveTooltip);
+    }
+
+    function ticked() {
+      linkElements
+        .attr('x1', d => d.source.x)
+        .attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x)
+        .attr('y2', d => d.target.y);
+
+      nodeElements.attr('transform', d => `translate(${d.x},${d.y})`);
+    }
+
+    // Drag-and-drop mechanics
+    def = null;
+    function dragStart(event, d) {
+      if (!event.active) simulation.alphaTarget(0.3).restart();
+      d.fx = d.x;
+      d.fy = d.y;
+    }
+    function dragged(event, d) {
+      d.fx = event.x;
+      d.fy = event.y;
+    }
+    function dragEnd(event, d) {
+      if (!event.active) simulation.alphaTarget(0);
+      d.fx = null;
+      d.fy = null;
+    }
+
+    // ============================================
+    // NETWORK INTERACTIVE HANDLERS
+    // ============================================
+    function onNodeClick(event, d, filteredEdges) {
+      event.stopPropagation();
+
+      // Find neighbor nodes based on filtered edges
+      const connectedIds = new Set([d.id]);
+      filteredEdges.forEach(e => {
+        const sid = typeof e.source === 'object' ? e.source.id : e.source;
+        const tid = typeof e.target === 'object' ? e.target.id : e.target;
+        if (sid === d.id) connectedIds.add(tid);
+        if (tid === d.id) connectedIds.add(sid);
+      });
+
+      // Toggle SVG classes
+      nodeElements
+        .classed('highlighted', n => n.id === d.id)
+        .classed('dimmed', n => !connectedIds.has(n.id));
+
+      linkElements
+        .classed('highlighted', e => {
+          const sid = typeof e.source === 'object' ? e.source.id : e.source;
+          const tid = typeof e.target === 'object' ? e.target.id : e.target;
+          return sid === d.id || tid === d.id;
+        })
+        .classed('dimmed', e => {
+          const sid = typeof e.source === 'object' ? e.source.id : e.source;
+          const tid = typeof e.target === 'object' ? e.target.id : e.target;
+          return sid !== d.id && tid !== d.id;
+        });
+
+      // Update sidebar details
+      updateInfoPanel(d, connectedIds);
+    }
+
+    function onNodeOver(event, d) {
+      const tooltip = document.getElementById('tooltip');
+      const termLabel = activeNetworkType === 'keywords' ? 'Palabra Clave' : 
+                        (activeNetworkType === 'authors' ? 'Autor' : 'Revista / Fuente');
+      
+      tooltip.innerHTML = `
+        <div class="tooltip-title">${d.id}</div>
+        <div>Frecuencia: <b>${d.count} artículos</b></div>
+        <div style="font-size:8px; color:var(--muted); margin-top:4px;">Hacer clic para ver conexiones</div>
+      `;
+      tooltip.classList.add('visible');
+      moveTooltip(event);
+    }
+
+    function onNodeOut() {
+      document.getElementById('tooltip').classList.remove('visible');
+    }
+
+    function moveTooltip(event) {
+      const tooltip = document.getElementById('tooltip');
+      if (!tooltip.classList.contains('visible')) return;
+      
+      const rect = document.getElementById('graphContainer').getBoundingClientRect();
+      const x = event.clientX - rect.left + 14;
+      const y = event.clientY - rect.top + 14;
+      
+      tooltip.style.left = `${x}px`;
+      tooltip.style.top = `${y}px`;
+    }
+
+    function resetZoom() {
+      if (svg && zoomBehavior) {
+        svg.transition()
+          .duration(500)
+          .call(zoomBehavior.transform, d3.zoomIdentity);
+      }
+    }
+
+    // ============================================
+    // NETWORK SIDEBAR DETAIL UPDATER
+    // ============================================
+    function updateInfoPanel(d, connectedIds) {
+      const panel = document.getElementById('infoPanel');
+      const neighbors = [...connectedIds].filter(id => id !== d.id);
+      const degree = neighbors.length;
+
+      // Group colors and tags based on active type
+      let classTag = 'tag';
+      if (activeNetworkType === 'authors') classTag = 'tag tag-author';
+      if (activeNetworkType === 'journals') classTag = 'tag tag-journal';
+
+      const tagsHtml = neighbors.slice(0, 15).map(n => `<span class="${classTag}">${n}</span>`).join('') +
+        (neighbors.length > 15 ? `<br><span style="font-size:9px;color:var(--muted);display:inline-block;margin-top:4px;">+${neighbors.length - 15} más...</span>` : '');
+
+      let extraMeta = '';
+      if (activeNetworkType === 'keywords') {
+        const clusterLabel = apiData.networks.keywords.cluster_labels[d.cluster] || `Tema ${d.cluster}`;
+        extraMeta = `
+          <div class="info-label">Clúster Temático</div>
+          <div class="info-value"><span class="tag" style="background:${getColor(d.cluster)}1A; border-color:${getColor(d.cluster)}; color:${getColor(d.cluster)}">${clusterLabel}</span></div>
+        `;
+      } else if (activeNetworkType === 'authors') {
+        // Find co-authored papers
+        const papers = apiData.articles.filter(art => art.authors.includes(d.id));
+        const titlesHtml = papers.slice(0, 3).map(p => `• <i style="color:var(--text);">${p.title}</i> (${p.year || 'S.F'})`).join('<br><br>');
+        extraMeta = `
+          <div class="info-label">Artículos del Autor (${papers.length})</div>
+          <div class="info-value" style="font-size:10px; max-height:120px; overflow-y:auto; padding-right:4px;">${titlesHtml || 'Sin datos'}</div>
+        `;
+      } else if (activeNetworkType === 'journals') {
+        // Find journal articles
+        const papers = apiData.articles.filter(art => art.journal === d.id);
+        const titlesHtml = papers.slice(0, 3).map(p => `• <i style="color:var(--text);">${p.title}</i>`).join('<br><br>');
+        extraMeta = `
+          <div class="info-label">Publicaciones de esta Revista (${papers.length})</div>
+          <div class="info-value" style="font-size:10px; max-height:120px; overflow-y:auto; padding-right:4px;">${titlesHtml || 'Sin datos'}</div>
+        `;
+      }
+
+      panel.innerHTML = `
+        <div class="node-info">
+          <div class="info-label">${activeNetworkType === 'keywords' ? 'Concepto' : (activeNetworkType === 'authors' ? 'Autor' : 'Journal / Revista')}</div>
+          <div class="info-value large">${d.id}</div>
+          
+          <div class="info-label">Frecuencia en Corpus</div>
+          <div class="info-value">${d.count} artículos</div>
+          
+          <div class="info-label">Grado de Conexión (Vecinos directos)</div>
+          <div class="info-value">${degree} nodos adyacentes</div>
+          
+          ${extraMeta}
+          
+          <div class="info-label">Nodos Vinculados (${degree})</div>
+          <div class="info-value" style="margin-top:4px;">${tagsHtml || '<span style="color:var(--muted)">Sin enlaces</span>'}</div>
+        </div>
+      `;
+    }
+
+    function updateNetworkLegend(clusterLabels) {
+      const content = document.getElementById('legendContent');
+      const title = document.getElementById('legendTitle');
+
+      if (activeNetworkType === 'keywords' || activeNetworkType === 'authors' || activeNetworkType === 'journals') {
+        title.textContent = activeNetworkType === 'keywords' ? "Temas Clave" : 
+                            (activeNetworkType === 'authors' ? "Grupos de Colaboración" : "Temáticas de Revistas");
+        
+        let html = '';
+        const clustersInUse = new Set(apiData.networks[activeNetworkType].nodes.map(n => n.cluster));
+        
+        // Show only the labels of clusters actually present in current node list
+        [...clustersInUse].sort((a,b)=>a-b).forEach(cIdx => {
+          const name = clusterLabels[cIdx] || `Comunidad ${cIdx}`;
+          html += `
+            <div class="legend-item">
+              <div class="legend-dot" style="background:${getColor(cIdx)}"></div>
+              <span>${name}</span>
+            </div>
+          `;
+        });
+        
+        content.innerHTML = html;
+      }
+    }
+
+    // ============================================
+    // GRAPH PARAMETERS UPDATER
+    // ============================================
+    function adjustForce(val) {
+      forcePower = +val;
+      document.getElementById('forceVal').textContent = val;
+      if (simulation) {
+        simulation.force('charge', d3.forceManyBody().strength(-forcePower));
+        simulation.alpha(0.2).restart();
+      }
+    }
+
+    function adjustDistance(val) {
+      linkDist = +val;
+      document.getElementById('distVal').textContent = val;
+      if (simulation) {
+        simulation.force('link').distance(linkDist);
+        simulation.alpha(0.2).restart();
+      }
+    }
+
+    function adjustMinWeight(val) {
+      minWeight = +val;
+      document.getElementById('minWeightVal').textContent = val;
+      drawNetwork();
+    }
+
+    // ============================================
+    // TAB 2: PLOTLY CORRELATION MATRIX RENDERING
+    // ============================================
+    function adjustMatrixTop(val) {
+      matrixTop = +val;
+      document.getElementById('matrixTopVal').textContent = val;
+      loadMatrix();
+    }
+
+    function loadMatrix() {
+      const entity = document.getElementById('matrixEntitySelect').value;
+      const metric = document.getElementById('matrixMetricSelect').value;
+
+      const container = document.getElementById('plotlyHeatmap');
+      
+      // Show loader
+      container.innerHTML = `
+        <div class="heatmap-placeholder">
+          <div class="loader"></div>
+          <span>Calculando correlaciones dinámicas...</span>
+        </div>
+      `;
+
+      fetch(`/api/matrix?entity=${entity}&metric=${metric}&top=${matrixTop}`)
+        .then(response => response.json())
+        .then(res => {
+          if (!res.success) {
+            container.innerHTML = `<div class="placeholder-msg" style="color:var(--accent-pink)">Error al calcular matriz: ${res.error}</div>`;
+            return;
+          }
+
+          if (res.labels.length === 0) {
+            container.innerHTML = `<div class="placeholder-msg">Sin datos suficientes para graficar la matriz.</div>`;
+            return;
+          }
+
+          // Render heatmap using Plotly.js
+          renderPlotlyHeatmap(res.labels, res.matrix, entity, metric);
+        })
+        .catch(err => {
+          console.error(err);
+          container.innerHTML = `<div class="placeholder-msg" style="color:var(--accent-pink)">Error de red al cargar la matriz.</div>`;
+        });
+    }
+
+    function renderPlotlyHeatmap(labels, values, entity, metric) {
+      const container = document.getElementById('plotlyHeatmap');
+      container.innerHTML = ''; // Clear loader
+
+      // 1. Define color palettes matching the theme
+      let colorscaleValue;
+      let rangeMin = 0;
+      let rangeMax = 1;
+
+      if (metric === 'cooccurrence') {
+        // Sequential scale: dark blue -> neon orange/teal
+        const maxValue = Math.max(...values.flatMap(row => row)) || 1;
+        rangeMax = maxValue;
+        colorscaleValue = [
+          [0.0, '#13181f'], // surface bg
+          [0.2, '#0c233c'], // dark blue
+          [0.5, '#103f6d'], // medium blue
+          [0.75, '#00d4aa'], // neon teal
+          [1.0, '#ff6b35']  // neon orange
+        ];
+      } else if (metric === 'cosine') {
+        // Sequential 0 to 1
+        colorscaleValue = [
+          [0.0, '#13181f'],
+          [0.3, '#103f6d'],
+          [0.7, '#00d4aa'],
+          [1.0, '#ff6b35']
+        ];
+      } else {
+        // Pearson Diverging scale (-1 to 1)
+        rangeMin = -1;
+        rangeMax = 1;
+        colorscaleValue = [
+          [0.0, '#ff007f'], // Strong negative correlation (neon pink)
+          [0.4, '#4a1525'], // Mild negative
+          [0.5, '#13181f'], // Zero correlation (dark surface)
+          [0.6, '#0b3d36'], // Mild positive
+          [1.0, '#00d4aa']  // Strong positive correlation (neon teal)
+        ];
+      }
+
+      // 2. Setup Plotly trace
+      const trace = {
+        z: values,
+        x: labels,
+        y: labels,
+        type: 'heatmap',
+        colorscale: colorscaleValue,
+        zmin: rangeMin,
+        zmax: rangeMax,
+        showscale: true,
+        colorbar: {
+          tickcolor: '#c8d6e5',
+          tickfont: { family: 'Space Mono', size: 9, color: '#c8d6e5' },
+          thickness: 15,
+          len: 0.95
+        },
+        hoverongaps: false,
+        hovertemplate: 
+          `<b>%{y}</b> x <b>%{x}</b><br>` +
+          `${metric === 'cooccurrence' ? 'Co-ocurrencias' : (metric === 'cosine' ? 'Similitud Coseno' : 'Corr. Pearson')}: ` +
+          `<b>%{z}</b><extra></extra>`
+      };
+
+      // 3. Layout configuration (clean retro-dark themed)
+      const layout = {
+        paper_bgcolor: '#13181f',
+        plot_bgcolor: '#13181f',
+        autosize: true,
+        xaxis: {
+          tickangle: -45,
+          tickcolor: '#1e2630',
+          tickfont: { color: '#c8d6e5', family: 'Space Mono', size: 9 },
+          gridcolor: '#1e2630',
+          side: 'bottom'
+        },
+        yaxis: {
+          tickcolor: '#1e2630',
+          tickfont: { color: '#c8d6e5', family: 'Space Mono', size: 9 },
+          gridcolor: '#1e2630',
+          autorange: 'reversed' // Keeps top-left as cell (0,0)
+        },
+        margin: { l: 140, r: 20, t: 40, b: 140 },
+        title: {
+          text: `Matriz de ${metric === 'cooccurrence' ? 'Co-ocurrencia' : (metric === 'cosine' ? 'Similitud Coseno (Ochiai)' : 'Correlación de Pearson')} (Top ${labels.length})`,
+          font: { color: '#00d4aa', family: 'Syne, sans-serif', size: 12, weight: 800 },
+          x: 0.05
+        }
+      };
+
+      const config = {
+        responsive: true,
+        displayModeBar: false // Keep it clean, hide toolbar
+      };
+
+      Plotly.newPlot('plotlyHeatmap', [trace], layout, config);
+    }
+  </script>
+</body>
+</html>
