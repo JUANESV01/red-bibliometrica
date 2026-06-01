@@ -885,12 +885,9 @@
               document.getElementById('resetFileBtn').style.display = 'none';
             }
 
-            // Draw network and load matrix
-            if (activeTab === 'network') {
-              drawNetwork();
-            } else {
-              loadMatrix();
-            }
+            // Draw network and pre-load matrix data for the current dataset
+            drawNetwork();
+            loadMatrix();
           } else {
             alert("Error cargando datos: " + res.error);
           }
